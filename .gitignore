@@ -1,0 +1,6 @@
+src_tema/data/raw/WHU/
+src_tema/data/patches_gt/*/
+src_tema/data/patches_imgs/*/
+src_tema/results/modelos/*
+__pycache__/
+tempCodeRunnerFile.py
