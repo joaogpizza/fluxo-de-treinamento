@@ -267,27 +267,47 @@ def binarizar_mascara(mascara_bruta: np.ndarray) -> np.ndarray:
     return (mascara_bruta > 0).astype(np.uint8) * 255
 
 
+def _posicoes_janelas(tamanho: int) -> List[int]:
+    """
+    Posições iniciais das janelas ao longo de um eixo com `tamanho` pixels.
+
+    As janelas cheias vão de STRIDE_PATCH em STRIDE_PATCH. Se sobrar na borda um
+    trecho sem cobertura de pelo menos MIN_FRACAO_VALIDA_PATCH do patch, uma
+    janela extra é encostada na borda (ela se sobrepõe à anterior, em vez de
+    precisar de padding). Sobras menores que isso são descartadas.
+
+    Um eixo menor que TAM_PATCH gera uma única janela (completada com zeros),
+    desde que cubra pelo menos MIN_FRACAO_VALIDA_PATCH do patch.
+    """
+    minimo = MIN_FRACAO_VALIDA_PATCH * TAM_PATCH
+
+    if tamanho < TAM_PATCH:
+        return [0] if tamanho >= minimo else []
+
+    posicoes = list(range(0, tamanho - TAM_PATCH + 1, STRIDE_PATCH))
+    sobra = tamanho - (posicoes[-1] + TAM_PATCH)
+    if 0 < sobra and sobra >= minimo:
+        posicoes.append(tamanho - TAM_PATCH)
+
+    return posicoes
+
+
 def gerar_patches(
     imagem: np.ndarray,
     mascara: np.ndarray
 ) -> Iterator[Tuple[np.ndarray, np.ndarray]]:
     """
-    Recorta imagem e máscara em janelas TAM_PATCH x TAM_PATCH com passo STRIDE_PATCH.
+    Recorta imagem e máscara em janelas TAM_PATCH x TAM_PATCH.
 
-    Janelas na borda que ultrapassam a imagem são completadas com zeros
-    (imagem preta e máscara de fundo), mas só viram patch se pelo menos
-    MIN_FRACAO_VALIDA_PATCH da área da janela for imagem real.
+    As janelas seguem _posicoes_janelas em cada eixo, então só há padding
+    (zeros na imagem e fundo na máscara) quando a imagem é menor que o patch.
     """
     altura, largura = imagem.shape[:2]
 
-    for y in range(0, altura, STRIDE_PATCH):
-        for x in range(0, largura, STRIDE_PATCH):
+    for y in _posicoes_janelas(altura):
+        for x in _posicoes_janelas(largura):
             altura_valida = min(TAM_PATCH, altura - y)
             largura_valida = min(TAM_PATCH, largura - x)
-
-            fracao_valida = (altura_valida * largura_valida) / (TAM_PATCH * TAM_PATCH)
-            if fracao_valida < MIN_FRACAO_VALIDA_PATCH:
-                continue
 
             if altura_valida == TAM_PATCH and largura_valida == TAM_PATCH:
                 yield imagem[y:y + TAM_PATCH, x:x + TAM_PATCH], mascara[y:y + TAM_PATCH, x:x + TAM_PATCH]
@@ -377,19 +397,30 @@ def imprimir_relatorio(estatisticas: Dict[str, EstatisticasSplit]) -> None:
             f"pixels de foreground: {stats.fracao_foreground:6.2%}"
         )
 
-    histograma_total = sum(stats.histograma_mascara for stats in estatisticas.values())
-    valores_presentes = np.flatnonzero(histograma_total)
+        histograma_total = sum(stats.histograma_mascara for stats in estatisticas.values())
     total_pixels = int(histograma_total.sum())
+    valores_presentes = np.flatnonzero(histograma_total)
+    mais_frequentes = sorted(valores_presentes, key=lambda valor: histograma_total[valor], reverse=True)
     resumo_valores = ", ".join(
-        f"{int(valor)} ({histograma_total[valor] / total_pixels:.2%})" for valor in valores_presentes[:10]
+        f"{int(valor)} ({histograma_total[valor] / total_pixels:.2%})" for valor in mais_frequentes[:5]
     )
-    print(f"\nValores de pixel encontrados nas máscaras originais: {resumo_valores}")
-    if len(valores_presentes) > 2:
+    print(f"\nValores de pixel nas máscaras originais ({len(valores_presentes)} distintos): {resumo_valores}")
+
+    valor_dominante_fg = max((v for v in valores_presentes if v > 0), key=lambda v: histograma_total[v], default=None)
+    intermediarios = sum(
+        int(histograma_total[v]) for v in valores_presentes if v not in (0, valor_dominante_fg)
+    )
+    fracao_intermediaria = intermediarios / total_pixels
+    if fracao_intermediaria >= 0.01:
         print(
-            "ATENÇÃO: as máscaras têm mais de 2 valores distintos. Se forem codificações diferentes do mesmo "
-            "foreground (ex: 1 e 255), a binarização '> 0' já resolve. Se forem classes distintas, o contrato "
-            "binário do projeto (1 canal, BCE/Dice, métricas com classes 0 e 1) NÃO se aplica: o número de "
-            "classes, a loss e as métricas precisariam ser ajustados."
+            f"ATENÇÃO: {fracao_intermediaria:.2%} dos pixels têm valores além de 0 e {valor_dominante_fg}. Se forem "
+            "classes distintas, o contrato binário do projeto (1 canal, BCE/Dice, métricas com classes 0 e 1) NÃO "
+            "se aplica: o número de classes, a loss e as métricas precisariam ser ajustados."
+        )
+    elif intermediarios > 0:
+        print(
+            f"Valores intermediários desprezíveis ({fracao_intermediaria:.4%}): provável anti-aliasing de borda. "
+            "A binarização '> 0' os trata como foreground."
         )
 
     media, std = estatisticas["train"].media_std_rgb()

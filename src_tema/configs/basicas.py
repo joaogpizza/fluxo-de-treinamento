@@ -2,9 +2,9 @@
 
 import torch.cuda as cuda
 
-TAM_PATCH = 256
-NORMALIZACAO_MEAN = (0.485, 0.456, 0.406)
-NORMALIZACAO_STD = (0.229, 0.224, 0.225)
+TAM_PATCH = 240
+NORMALIZACAO_MEAN = (0.4807, 0.4598, 0.6807)
+NORMALIZACAO_STD = (0.1776, 0.1705, 0.1246)
 NUM_EPOCAS = 25
 LIMIAR = 0.5
 DEVICE = "cuda" if cuda.is_available() else "cpu"

@@ -62,24 +62,53 @@ def test_patches_sem_sobra_cobrem_a_imagem_inteira():
     assert np.array_equal(patches[0][0], imagem[:TAM_PATCH, :TAM_PATCH])
 
 
-def test_patches_de_borda_sao_completados_com_zeros_e_descartam_sobras_pequenas():
-    # 1.5 x 1.5 patches: 1 patch cheio, 2 patches com 50% de área válida e 1 com 25% (descartado)
+def test_sobra_grande_na_borda_vira_janela_encostada_sem_padding():
+    # largura = 1.75 patches: janelas em x = 0 e x = largura - TAM_PATCH (sobreposição), altura = 1 patch
+    largura = TAM_PATCH + (3 * TAM_PATCH) // 4
+    imagem = np.random.randint(1, 255, (TAM_PATCH, largura, 3), dtype=np.uint8)  # sem pixels pretos
+    mascara = np.full((TAM_PATCH, largura), 255, dtype=np.uint8)
+
+    patches = list(gerar_patches(imagem, mascara))
+
+    assert len(patches) == 2
+    assert np.array_equal(patches[0][0], imagem[:, :TAM_PATCH])
+    assert np.array_equal(patches[1][0], imagem[:, largura - TAM_PATCH:])
+    assert all(img.min() >= 1 and msk.min() == 255 for img, msk in patches)  # nenhum zero de padding
+
+
+def test_sobra_pequena_na_borda_e_descartada():
+    imagem = np.full((TAM_PATCH + 10, TAM_PATCH, 3), 7, dtype=np.uint8)
+    mascara = np.zeros(imagem.shape[:2], dtype=np.uint8)
+
+    patches = list(gerar_patches(imagem, mascara))
+
+    assert len(patches) == 1
+    assert np.array_equal(patches[0][0], imagem[:TAM_PATCH])
+
+
+def test_sobra_exatamente_metade_do_patch_gera_janela_extra():
     lado = TAM_PATCH + TAM_PATCH // 2
     imagem = np.full((lado, lado, 3), 255, dtype=np.uint8)
     mascara = np.full((lado, lado), 255, dtype=np.uint8)
 
     patches = list(gerar_patches(imagem, mascara))
 
-    assert len(patches) == 3
-    for img, msk in patches:
-        assert img.shape == (TAM_PATCH, TAM_PATCH, 3) and msk.shape == (TAM_PATCH, TAM_PATCH)
-    img_borda, msk_borda = patches[1]
-    assert img_borda[:, TAM_PATCH // 2:].max() == 0 and msk_borda[:, TAM_PATCH // 2:].max() == 0
-    assert msk_borda[:, :TAM_PATCH // 2].min() == 255
+    assert len(patches) == 4
+    assert all(img.min() == 255 for img, _ in patches)
 
 
-def test_imagem_menor_que_o_patch_gera_um_patch_se_cobrir_metade():
+def test_imagem_menor_que_o_patch_e_completada_com_zeros_se_cobrir_metade():
     imagem = np.full((TAM_PATCH - 10, TAM_PATCH - 10, 3), 10, dtype=np.uint8)
     mascara = np.zeros(imagem.shape[:2], dtype=np.uint8)
 
-    assert len(list(gerar_patches(imagem, mascara))) == 1
+    patches = list(gerar_patches(imagem, mascara))
+
+    assert len(patches) == 1
+    assert patches[0][0][TAM_PATCH - 10:].max() == 0 and patches[0][0][:TAM_PATCH - 10, :TAM_PATCH - 10].min() == 10
+
+
+def test_imagem_muito_menor_que_o_patch_nao_gera_patch():
+    imagem = np.full((TAM_PATCH // 4, TAM_PATCH // 4, 3), 10, dtype=np.uint8)
+    mascara = np.zeros(imagem.shape[:2], dtype=np.uint8)
+
+    assert list(gerar_patches(imagem, mascara)) == []

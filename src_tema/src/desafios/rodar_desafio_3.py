@@ -13,6 +13,9 @@ from src.desafios.desafio_3_utils import (
 # Alterar baseado na VRAM e GPU
 NUM_WORKERS = 4
 
+# Alterar baseado no tamanho do dataset
+FRACAO_DADOS = 1.0
+
 def fluxo_mestre():
     print("Iniciando Fluxo Mestre do Desafio 3...")
 
@@ -26,7 +29,7 @@ def fluxo_mestre():
             rodar_experimento_completo(
                 nome_arquitetura="UKAN", nome_loss="FOCALDICE", nome_otimizador="ADAMW",
                 nome_scheduler="COSSENO", nome_early_stopper="PADRAO", lr=0.001,
-                aplicar_aug=True, seed=s, fracao_dados=0.1, num_workers=NUM_WORKERS
+                aplicar_aug=True, seed=s, fracao_dados=FRACAO_DADOS, num_workers=NUM_WORKERS
             )
         else:
             print(f"[CACHE] Experimento já executado: {nome_e1}")
@@ -46,7 +49,7 @@ def fluxo_mestre():
                 rodar_experimento_completo(
                     nome_arquitetura="UKAN", nome_loss="FOCALDICE", nome_otimizador=opt,
                     nome_scheduler="WARMUP_COSSENO", nome_early_stopper="PADRAO", lr=lr,
-                    aplicar_aug=True, seed=seed_etapa2, fracao_dados=0.1, num_workers=NUM_WORKERS
+                    aplicar_aug=True, seed=seed_etapa2, fracao_dados=FRACAO_DADOS, num_workers=NUM_WORKERS
                 )
             else:
                 print(f"[CACHE] Experimento já executado: {nome_e2}")
@@ -80,7 +83,7 @@ def fluxo_mestre():
                 rodar_experimento_completo(
                     nome_arquitetura="UKAN", nome_loss="FOCALDICE", nome_otimizador=opt,
                     nome_scheduler=sched, nome_early_stopper="PADRAO", lr=melhor_lr,
-                    aplicar_aug=True, seed=42, fracao_dados=0.1, num_workers=NUM_WORKERS
+                    aplicar_aug=True, seed=42, fracao_dados=FRACAO_DADOS, num_workers=NUM_WORKERS
                 )
             else:
                 print(f"[CACHE] Experimento já executado: {nome_e3}")
@@ -124,7 +127,7 @@ def fluxo_mestre():
                     lr=row["learning_rate"],
                     aplicar_aug=row["usou_aumento_dados"], 
                     seed=s,
-                    fracao_dados=0.1,
+                    fracao_dados=FRACAO_DADOS,
                     num_workers=NUM_WORKERS
                 )
             else:
