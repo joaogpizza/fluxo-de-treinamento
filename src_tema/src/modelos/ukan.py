@@ -33,7 +33,7 @@ class KANLinear(nn.Module):
             escala_ruido: float = 0.1,
             escala_base: float = 1.0,
             escala_spline: float = 1.0,
-            faixa_grid: Tuple[float, float] = (-1.0, 1.0)
+            faixa_grid: Tuple[float, float] = (-2.5, 2.5)
         ) -> None:
         super().__init__()
         self.features_entrada = features_entrada
@@ -319,10 +319,12 @@ class UKAN(nn.Module):
                     nn.init.constant_(m.weight, 1.0)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if x.shape[2] % 32 != 0 or x.shape[3] % 32 != 0:
-            raise ValueError(
-                f"A U-KAN exige altura e largura divisíveis por 32, mas recebeu {tuple(x.shape[2:])}"
-            )
+        h_orig, w_orig = x.shape[2], x.shape[3]
+        pad_h = (32 - h_orig % 32) % 32
+        pad_w = (32 - w_orig % 32) % 32
+
+        if pad_h > 0 or pad_w > 0:
+            x = F.pad(x, (0, pad_w, 0, pad_h), mode="reflect")
 
         # Encoder convolucional
         t1 = self.maxpool(self.encoder1(x))
@@ -355,4 +357,7 @@ class UKAN(nn.Module):
         out = _subir(self.decoder4(out)) + t1
         out = _subir(self.decoder5(out))
 
-        return self.saida(out)
+        logits = self.saida(out)
+        if pad_h > 0 or pad_w > 0:
+            logits = logits[:, :, :h_orig, :w_orig].contiguous()
+        return logits

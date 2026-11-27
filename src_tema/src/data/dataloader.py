@@ -12,19 +12,25 @@ from src.utils.paths import (
 )
 from src.data.datasets import HistologiaDataset
 from configs.basicas import (
-    DEVICE, TAM_BATCH, EXTENSAO_PATCH_IMAGEM, EXTENSAO_PATCH_MASCARA
+    DEVICE, TAM_BATCH, EXTENSAO_PATCH_IMAGEM, EXTENSAO_PATCH_MASCARA, SEED_SPLIT
 )
+
 
 def criar_dataloaders(
     num_workers: int = 0,
     aplicar_aug: bool = False,
-    fracao_dados: float = 1.0
+    fracao_dados: float = 1.0,
+    num_particoes: int = 1,
+    indice_particao: int = 0,
+    seed_particao: int = SEED_SPLIT
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """
     Cria os dataloaders de treino, validação e teste do dataset.
 
     O retorno é na seguinte ordem: dataloader de treino, dataloader de
-    validação e dataloader de teste.
+    validação e dataloader de teste. Quando `num_particoes > 1`, apenas o
+    dataset de treino é particionado de forma disjunta por imagem-mãe,
+    mantendo validação e teste completos e compartilhados.
 
     Os patches devem ter sido gerados antes por scripts/criacao_patches.py.
     """
@@ -35,7 +41,10 @@ def criar_dataloaders(
         extensao_imagem=EXTENSAO_PATCH_IMAGEM,
         aplicar_aug=aplicar_aug,
         fracao_dados=fracao_dados,
-        extensao_mascara=EXTENSAO_PATCH_MASCARA
+        extensao_mascara=EXTENSAO_PATCH_MASCARA,
+        num_particoes=num_particoes,
+        indice_particao=indice_particao,
+        seed_particao=seed_particao
     )
 
     dataset_val = HistologiaDataset(

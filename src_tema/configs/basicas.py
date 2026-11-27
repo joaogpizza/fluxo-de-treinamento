@@ -31,3 +31,8 @@ SEED_SPLIT = 42
 FRACAO_TREINO = 0.55
 FRACAO_VAL = 0.15
 FRACAO_TESTE = 0.3
+
+# Configurações padrão de Ensemble
+ESTRATEGIAS_AGREGACAO_ENSEMBLE = ("media_logits", "media_probs", "max_logits", "max_probs")
+ESTRATEGIA_AGREGACAO_PADRAO = "media_probs"
+MODO_PESOS_ENSEMBLE_PADRAO = "fixo"

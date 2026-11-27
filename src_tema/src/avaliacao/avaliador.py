@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import numbers
-from typing import Any
+from typing import Any, Sequence, Tuple
 
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from src.avaliacao.metricas import MetricasBinarias, agregar_metricas, calcular_metricas_por_imagem
-from configs.basicas import DEVICE, LIMIAR
+from src.modelos.ensemble import EnsembleInferencia
+from src.modelos.modelo_factory import pegar_modelo
+from src.utils.checkpoints import carregar_checkpoint
+from configs.basicas import DEVICE, ESTRATEGIA_AGREGACAO_PADRAO, LIMIAR
 
 
 def _validar_entrada(
@@ -84,3 +87,44 @@ def avaliar_modelo(
     if not metricas_por_imagem:
         raise ValueError("Nenhuma imagem foi recebida para avaliação.")
     return agregar_metricas(metricas_por_imagem)
+
+
+@torch.no_grad()
+def avaliar_ensemble_checkpoints(
+    especificacoes_modelos: Sequence[Tuple[str, str]],
+    dataloader_teste: DataLoader,
+    estrategia_agregacao: str = ESTRATEGIA_AGREGACAO_PADRAO,
+) -> MetricasBinarias:
+    """
+    Instancia cada arquitetura especificada via `pegar_modelo`, carrega seus
+    pesos a partir do respectivo checkpoint via `carregar_checkpoint`, monta um
+    `EnsembleInferencia` em `DEVICE` e avalia o conjunto no `dataloader_teste`.
+    """
+    if not especificacoes_modelos or len(especificacoes_modelos) < 2:
+        raise ValueError(
+            "especificacoes_modelos deve conter pelo menos 2 pares (nome_arquitetura, caminho_checkpoint)."
+        )
+
+    modelos: list[nn.Module] = []
+    for especificacao in especificacoes_modelos:
+        if len(especificacao) == 2:
+            nome_arquitetura, caminho_checkpoint = especificacao
+            modelo_kwargs = {}
+        elif len(especificacao) == 3:
+            nome_arquitetura, caminho_checkpoint, modelo_kwargs = especificacao  # type: ignore[misc]
+        else:
+            raise ValueError(
+                "Cada especificação deve ser uma tupla (nome_arquitetura, caminho_checkpoint)."
+            )
+
+        submodelo = pegar_modelo(nome_arquitetura, **(modelo_kwargs or {})).to(DEVICE)
+        carregar_checkpoint(submodelo, caminho=caminho_checkpoint)
+        submodelo.eval()
+        modelos.append(submodelo)
+
+    ensemble = EnsembleInferencia(
+        modelos=modelos,
+        estrategia_agregacao=estrategia_agregacao,
+    ).to(DEVICE)
+
+    return avaliar_modelo(ensemble, dataloader_teste)

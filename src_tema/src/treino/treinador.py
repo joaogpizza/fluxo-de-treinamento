@@ -43,17 +43,19 @@ def treinar_epoca(
     """Treina o modelo por uma única época, gerando os logs requisitados a cada k passos."""
     modelo.train()
     loss_epoca = 0.0
+    usar_amp = DEVICE == "cuda"
+    device_type = "cuda" if usar_amp else "cpu"
 
     for inputs, mascaras in dataloader:
         inputs = inputs.to(DEVICE)
         mascaras = mascaras.to(DEVICE)
 
         otimizador.zero_grad()
-        
-        with torch.amp.autocast(device_type="cuda"):
+
+        with torch.amp.autocast(device_type=device_type, enabled=usar_amp):
             logits = modelo(inputs)
             perda = f_loss(logits, mascaras)
-        
+
         scaler.scale(perda).backward()
 
         vai_gerar_log = (passo_global + 1) % k == 0
@@ -69,7 +71,7 @@ def treinar_epoca(
 
         scaler.step(otimizador)
         scaler.update()
-        
+
         passo_global += 1
 
         if vai_gerar_log:
@@ -111,14 +113,15 @@ def treinar_modelo(
     das strings recebidas e controlando o fluxo do projeto.
     """
     os.makedirs(PATH_RESULTS_MODELOS, exist_ok=True)
-    
-    modelo = pegar_modelo(nome_arquitetura).to(DEVICE)
+
+    modelo = pegar_modelo(nome_arquitetura, **kwargs.get("modelo_kwargs", {})).to(DEVICE)
     f_loss = pegar_loss(nome_loss, **kwargs.get('loss_kwargs', {}))
     otimizador = pegar_otimizador(nome_otimizador, modelo.parameters(), lr, **kwargs.get('otimizador_kwargs', {}))
     scheduler = pegar_scheduler(nome_scheduler, otimizador, **kwargs.get('scheduler_kwargs', {}))
     early_stopper = pegar_early_stopper(nome_early_stopper, **kwargs.get('early_stopper_kwargs', {}))
 
-    scaler = torch.amp.GradScaler("cuda")
+    usar_amp = DEVICE == "cuda"
+    scaler = torch.amp.GradScaler("cuda", enabled=usar_amp)
 
     camadas_monitoradas = obter_camadas_alvo_monitoramento(modelo)
 
@@ -150,16 +153,16 @@ def treinar_modelo(
         )
 
         if torch.isnan(torch.tensor(loss_treino)) or loss_treino > 1e4:
-                    divergiu = True
-                    print(f"\n[AVISO] Treinamento do modelo {nome_modelo} divergiu na época {epoca}.")
-                    historico_lr.pop()
-                    if epoca == 1:
-                        caminho_salvar = os.path.join(PATH_RESULTS_MODELOS, f"{nome_modelo}.pt")
-                        salvar_checkpoint(modelo, otimizador, epoca, caminho=caminho_salvar)
-                    break
+            divergiu = True
+            print(f"\n[AVISO] Treinamento do modelo {nome_modelo} divergiu na época {epoca}.")
+            historico_lr.pop()
+            if epoca == 1:
+                caminho_salvar = os.path.join(PATH_RESULTS_MODELOS, f"{nome_modelo}.pt")
+                salvar_checkpoint(modelo, otimizador, epoca, caminho=caminho_salvar)
+            break
 
         loss_val, mdice_val, _ = validar(modelo, dataloader_val, f_loss)
-        
+
         if nome_scheduler.upper() == "REDUCE_ON_PLATEAU":
             scheduler.step(loss_val)
         else:
@@ -175,12 +178,21 @@ def treinar_modelo(
             caminho_salvar = os.path.join(PATH_RESULTS_MODELOS, f"{nome_modelo}.pt")
             salvar_checkpoint(modelo, otimizador, epoca, caminho=caminho_salvar)
 
-        print(f'Final da epoca {epoca}, mdice = {mdice_val}')
-        
+        if hasattr(modelo, "obter_pesos_normalizados") and callable(modelo.obter_pesos_normalizados):
+            pesos_norm = modelo.obter_pesos_normalizados()
+            pesos_formatados = [round(p, 4) for p in pesos_norm]
+            print(f'Final da epoca {epoca}, mdice = {mdice_val} | pesos_ensemble = {pesos_formatados}')
+        else:
+            print(f'Final da epoca {epoca}, mdice = {mdice_val}')
+
         _ = early_stopper(perda_val=loss_val, perda_treino=loss_treino, metrica_val=mdice_val)
         if early_stopper.parada_antecipada:
             print(f"\n[INFO] Early Stopping engatilhado de forma precoce na época {epoca}.")
             break
+
+    if hasattr(modelo, "obter_pesos_normalizados") and callable(modelo.obter_pesos_normalizados):
+        pesos_finais = modelo.obter_pesos_normalizados()
+        print(f"[INFO] Pesos normalizados finais ({nome_modelo}): {[round(p, 6) for p in pesos_finais]}")
 
     plotar_losses(nome_modelo, historico_loss_treino, historico_loss_val)
     plotar_mdice_val(nome_modelo, historico_mdice_val)

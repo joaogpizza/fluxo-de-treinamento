@@ -16,6 +16,8 @@ def plotar_losses(nome: str, historico_loss_treino: List[float], historico_loss_
     if len(historico_loss_treino) == 0 or len(historico_loss_val) == 0:
         return
 
+    os.makedirs(PATH_PLOTS_CURVAS_APRENDIZADO_LOSS, exist_ok=True)
+
     plt.figure(figsize=(10, 6))
     
     epocas = range(1, len(historico_loss_treino) + 1)
@@ -39,6 +41,8 @@ def plotar_mdice_val(nome: str, historico_mdice_val: List[float]):
     if len(historico_mdice_val) == 0:
         return
 
+    os.makedirs(PATH_PLOTS_CURVAS_APRENDIZADO_MDICE, exist_ok=True)
+
     plt.figure(figsize=(10, 6))
     
     epocas = range(1, len(historico_mdice_val) + 1)
@@ -60,6 +64,8 @@ def plotar_taxa_aprendizado(nome: str, historico_lr: List[float]) -> None:
 
     if len(historico_lr) == 0:
         return
+
+    os.makedirs(PATH_PLOTS_CURVAS_APRENDIZADO_TAXA_APRENDIZADO, exist_ok=True)
 
     plt.figure(figsize=(10, 6))
     
