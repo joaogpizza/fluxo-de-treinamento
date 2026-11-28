@@ -9,6 +9,7 @@ from src.modelos.ensemble import EnsembleEndToEnd
 from src.modelos.unet import UNet
 from src.modelos.ukan import UKAN
 from src.modelos.segformer import SegFormer
+from src.modelos.ffg_unet import FFGUNet
 
 
 def pegar_modelo(nome: str, **kwargs: Any) -> nn.Module:
@@ -19,6 +20,7 @@ def pegar_modelo(nome: str, **kwargs: Any) -> nn.Module:
     - "UNET": U-Net padrão definida em src_tema/src/modelos/unet.py
     - "UKAN": U-KAN definida em src_tema/src/modelos/ukan.py
     - "SEGFORMER": Segformer definida em src_tema/src/modelos/segformer.py
+    - "FFGUNET": FFG-Unet definida em src_tema/src/modelos/ffg_unet.py
     - "ENSEMBLE_E2E": EnsembleEndToEnd definido em src_tema/src/modelos/ensemble.py
       (requer `arquiteturas: Sequence[str]`, aceitando `pesos` e `pesos_aprendiveis`)
 
@@ -35,6 +37,8 @@ def pegar_modelo(nome: str, **kwargs: Any) -> nn.Module:
         return UKAN(**kwargs)
     elif nome_upper == "SEGFORMER":
         return SegFormer(**kwargs)
+    elif nome_upper == "FFGUNET":
+        return FFGUNet(**kwargs)
     elif nome_upper == "ENSEMBLE_E2E":
         arquiteturas: Optional[Sequence[str]] = kwargs.get("arquiteturas")
         if arquiteturas is None or len(arquiteturas) < 2:
